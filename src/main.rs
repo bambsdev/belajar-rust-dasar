@@ -1196,9 +1196,14 @@ struct Apple {
 }
 use core::ops::{Add, Sub};
 use std::{
+    cell::RefCell,
     cmp::Ordering,
-    collections::{LinkedList, VecDeque},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     fmt::Debug,
+    ops::Deref,
+    rc::Rc,
+    result,
+    sync::Mutex,
 };
 impl<'a, 'b> Add<&'b Apple> for &'a Apple {
     type Output = Apple;
@@ -1441,4 +1446,509 @@ fn test_linked_list() {
     }
     println!("{:?}", names);
     // println!("{:?}", names[1]); // error.. linked list gk bisa pakai index
+}
+
+// ! Maps. ada dua
+
+#[test]
+fn test_hash_map() {
+    // lebih cepat untuk insert dan get karena data tidak diurutkan
+    let mut map = HashMap::new();
+    map.insert(String::from("name"), String::from("Ibrohim"));
+    map.insert(String::from("age"), String::from("20"));
+
+    let name = map.get(&String::from("name"));
+    let age = map.get("age"); // bisa begini
+
+    println!("{}", name.unwrap());
+    println!("{}", age.unwrap());
+
+    for entry in map {
+        // urutan akan acak harena menggunakan hash bukan btree
+        println!("{} {}", entry.0, entry.1);
+    }
+}
+
+#[test]
+fn test_btree_map() {
+    // lebih lambat, tapi dijamin data akan urut
+    let mut map = BTreeMap::new();
+    map.insert(String::from("name"), String::from("Ibrohim"));
+    map.insert(String::from("age"), String::from("20"));
+    map.insert(String::from("country"), String::from("Indonesia"));
+
+    let name = map.get(&String::from("name"));
+    let age = map.get("age"); // bisa begini
+
+    println!("{}", name.unwrap());
+    println!("{}", age.unwrap());
+
+    for entry in map {
+        // urutan akan urut berdasarkan abjad keynya
+        println!("{} {}", entry.0, entry.1);
+    }
+}
+
+// ! Sets
+
+#[test]
+fn test_hash_set() {
+    // lebih cepat karena hash
+    let mut set = HashSet::new();
+    set.insert(String::from("Ibrohim"));
+    set.insert(String::from("Ibrohim")); // Data yang sama akan di-replice
+    set.insert(String::from("Hendra"));
+    set.insert(String::from("Hendra"));
+    set.insert(String::from("Sairony"));
+    set.insert(String::from("Sairony"));
+
+    for value in set {
+        println!("{}", value);
+    }
+}
+#[test]
+fn test_btree_set() {
+    // lebih lambat karena diurutkan juga
+    let mut set = BTreeSet::new();
+    set.insert(String::from("Ibrohim"));
+    set.insert(String::from("Ibrohim")); // Data yang sama akan di-replice
+    set.insert(String::from("Hendra"));
+    set.insert(String::from("Hendra"));
+    set.insert(String::from("Sairony"));
+    set.insert(String::from("Sairony"));
+
+    for value in set {
+        println!("{}", value);
+    }
+}
+
+#[test]
+fn test_iterator() {
+    // semua data yang multiple seperti array, slice, map, set, squence
+    let array = [1, 2, 3, 4, 5];
+    let mut iterator = array.iter();
+
+    while let Some(value) = iterator.next() {
+        println!("{}", value);
+    }
+
+    for value in iterator {
+        println!("{}", value);
+    }
+}
+
+#[test]
+fn test_iterator_method() {
+    let vector = vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+    println!("{:?}", vector);
+
+    let sum: i32 = vector.iter().sum();
+    println!("{}", sum);
+
+    let count = vector.iter().count();
+    println!("{}", count);
+
+    let doubled: Vec<i32> = vector.iter().map(|x| x * 2).collect();
+    println!("{:?}", doubled);
+
+    let odd: Vec<&i32> = vector.iter().filter(|x| *x % 2 != 0).collect();
+    println!("{:?}", odd);
+    println!("{:?}", vector);
+}
+
+fn connect_database(host: Option<String>) {
+    match host {
+        Some(host) => {
+            println!("Connect to database : {}", host);
+        }
+        None => {
+            panic!("No database host provider");
+        }
+    }
+}
+
+#[test]
+fn test_connect_database() {
+    connect_database(Some("localhost".to_string()));
+    connect_database(None);
+}
+
+fn connect_cache(host: Option<String>) -> Result<String, String> {
+    match host {
+        None => Err("No cache host provider".to_string()),
+        Some(host) => Ok(host),
+    }
+}
+fn connect_email(host: Option<String>) -> Result<String, String> {
+    match host {
+        None => Err("No email host provider".to_string()),
+        Some(host) => Ok(host),
+    }
+}
+
+fn connect_application(host: Option<String>) -> Result<String, String> {
+    /*let connet_cache = connect_cache(host.clone()); // ! Terlalu bertele-tele
+    match connet_cache {
+        Ok(_) => {}
+        Err(err) => return Err(err),
+    }
+    let connet_email = connect_email(host.clone());
+    match connet_email {
+        Ok(_) => {}
+        Err(err) => return Err(err),
+    }*/
+
+    connect_cache(host.clone())?; // ! lebih simple menggunakan ?
+    connect_email(host.clone())?;
+    Ok("Connect to application".to_string())
+}
+
+#[test]
+fn test_application_connect() {
+    let result = connect_application(Some("localhost".to_string()));
+    match result {
+        Err(err) => println!("Error with message  {}", err),
+        Ok(host) => println!("Success connect with message : {}", host),
+    }
+}
+
+#[test]
+fn test_recovable_error() {
+    let cache = connect_cache(Some("localhost".to_string()));
+
+    match cache {
+        Ok(host) => println!("Success to connect to host : {}", host),
+        Err(err) => println!("Error whith message : {}", err),
+    }
+}
+
+#[test]
+fn test_dangling_reference() {
+    let r: &i32;
+    {
+        let _x = 30;
+        // r = &x; // ! error karena hidupnya sebentar
+    }
+    r = &40;
+    println!("{}", r);
+}
+
+fn longest<'a>(value1: &'a str, value2: &'a str) -> &'a str {
+    if value1.len() > value2.len() {
+        value1
+    } else {
+        value2
+    }
+}
+
+#[test]
+fn test_lifetime_annotation() {
+    let value1 = "Ibrohim";
+    let value2 = "Sairony";
+    let result = longest(value1, value2);
+    println!("{}", result);
+}
+
+#[test]
+fn test_lifetime_annotation_dangling_refereence() {
+    let str1 = "Ibrohim";
+    let string1 = String::from("Sairony");
+    let result;
+    {
+        result = longest(&string1.as_str(), &str1)
+    }
+    println!("{}", result);
+}
+
+struct Student<'a, 'b> {
+    name: &'a str,
+    last_name: &'b str,
+}
+
+impl<'a, 'b> Student<'a, 'b> {
+    fn longest_name(&self, student2: &Student<'a, 'b>) -> &'a str {
+        if self.name.len() > student2.name.len() {
+            self.name
+        } else {
+            student2.name
+        }
+    }
+}
+
+fn longest_student_name<'a, 'b>(student1: &Student<'a, 'b>, student2: &Student<'a, 'b>) -> &'a str {
+    if student1.name.len() > student2.name.len() {
+        student1.name
+    } else {
+        student2.name
+    }
+}
+
+#[test]
+fn test_student() {
+    let student1 = Student {
+        name: "Ibrohim",
+        last_name: "Sairony",
+    };
+    let student2 = Student {
+        name: "Ahmad",
+        last_name: "Sairony",
+    };
+
+    let result = longest_student_name(&student1, &student2);
+    println!("{}", result);
+
+    let result = student1.longest_name(&student2);
+    println!("{}", result);
+}
+
+struct Teacher<'a, ID>
+where
+    ID: Ord,
+{
+    id: ID,
+    name: &'a str,
+}
+
+#[test]
+fn test_lifetime_annotation_generic() {
+    let teacher = Teacher {
+        id: 30,
+        name: "Ibrohim",
+    };
+    println!("{}", teacher.id);
+    println!("{}", teacher.name);
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+struct Company {
+    name: String,
+    location: String,
+    website: String,
+}
+
+#[test]
+fn test_attribute_derive() {
+    let company1 = Company {
+        location: "Indonesia".to_string(),
+        name: "Santrikita".to_string(),
+        website: "https://www.santrikita.com".to_string(),
+    };
+    let company2 = Company {
+        location: "Indonesia".to_string(),
+        name: "Santrikita".to_string(),
+        website: "https://www.santrikita.com".to_string(),
+    };
+
+    let result = company1 == company2;
+    println!("{}", result);
+    let result = company1 >= company2;
+    println!("{}", result);
+
+    println!("{:?}", company1);
+}
+
+#[test]
+fn test_box() {
+    let value = Box::new(2000);
+    println!("{}", value);
+    display_number(*value);
+    display_number_reference(&value);
+}
+fn display_number(v: i32) {
+    println!("{}", v)
+}
+fn display_number_reference(v: &i32) {
+    println!("{}", v)
+}
+
+#[derive(Debug)]
+enum ProductCategory {
+    // Smart Pointer akan berguna saat menemukan type data yang recursive
+    Of(String, Box<ProductCategory>),
+    End,
+}
+
+#[test]
+fn test_box_enum() {
+    let category = ProductCategory::Of(
+        "Laptop".to_string(),
+        Box::new(ProductCategory::Of(
+            "Dell".to_string(),
+            Box::new(ProductCategory::Of(
+                "Latitude".to_string(),
+                Box::new(ProductCategory::Of(
+                    "Lipat".to_string(),
+                    Box::new(ProductCategory::Of(
+                        "battrai tanam".to_string(),
+                        Box::new(ProductCategory::Of(
+                            "Battrai Rusak".to_string(),
+                            Box::new(ProductCategory::End),
+                        )),
+                    )),
+                )),
+            )),
+        )),
+    );
+
+    println!("{:?}", category);
+}
+
+#[test]
+fn test_dereference() {
+    let box1 = Box::new(10);
+    let box2 = Box::new(20);
+
+    let value3 = *box1 * *box2;
+    println!("{}", value3);
+}
+
+struct MyValue<T> {
+    value: T,
+}
+
+impl<T> Deref for MyValue<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+#[test]
+fn test_deref_struct() {
+    let value = MyValue { value: 20 };
+    let real_value = *value;
+    println!("Value : {}", real_value);
+}
+
+fn say_hello_reference(name: &String) {
+    println!("Hello : {}", name);
+}
+
+#[test]
+fn test_deref_reference() {
+    let name = MyValue {
+        value: "Ibrohim".to_string(),
+    };
+    say_hello_reference(&name); // langsung nyebut structnya soalnya dia dah punya method deref
+}
+
+struct Book {
+    title: String,
+}
+
+impl Drop for Book {
+    fn drop(&mut self) {
+        println!("Dropping book : {}", self.title);
+    }
+}
+
+#[test]
+fn test_drop() {
+    let book = Book {
+        title: "Buku Rust Programming".to_string(),
+    };
+    println!("{}", book.title);
+}
+
+enum Brand {
+    Of(String, Rc<Brand>),
+    End,
+}
+
+#[test]
+fn test_multiple_ownership() {
+    let apple = Rc::new(Brand::Of("Apple".to_string(), Rc::new(Brand::End)));
+    println!("Apple referece count : {}", Rc::strong_count(&apple)); // * menghitung berapa jumlah peemilik data apple
+
+    let laptop = Brand::Of("Laptop".to_string(), Rc::clone(&apple));
+    println!("Apple referece count : {}", Rc::strong_count(&apple));
+    {
+        let smartwatch = Brand::Of("Smartwacth".to_string(), Rc::clone(&apple));
+        println!("Apple referece count : {}", Rc::strong_count(&apple));
+    }
+    println!("Apple referece count : {}", Rc::strong_count(&apple));
+
+    // let apple = ProductCategory::Of("Apple".to_string(), Box::new(ProductCategory::End));
+    // let laptop = ProductCategory::Of("Laptop".to_string(), Box::new(apple));
+    // let smartwatch = ProductCategory::Of("Smartwacth".to_string(), Box::new(apple)); //! Error karena multipel ownersip
+}
+
+#[derive(Debug)]
+struct Seller {
+    name: RefCell<String>,
+    active: RefCell<bool>,
+}
+#[test]
+fn test_ref_cell() {
+    let seller = Seller {
+        name: RefCell::new("Ibrohim".to_string()),
+        active: RefCell::new(true),
+    };
+    {
+        let mut result = seller.name.borrow_mut();
+        *result = "Ahmad".to_string();
+    }
+
+    println!("{:?}", seller);
+}
+
+static APPLICATION: &str = "my App";
+
+#[test]
+fn test_static() {
+    println!("{}", APPLICATION);
+}
+
+static COUNTER: Mutex<u32> = Mutex::new(0);
+
+fn increment() {
+    let mut counter = COUNTER.lock().unwrap();
+    *counter += 1;
+}
+
+#[test]
+fn test_unsafe() {
+    increment();
+    {
+        let mut counter = COUNTER.lock().unwrap();
+        *counter += 1;
+    }
+    let counter = COUNTER.lock().unwrap();
+    println!("Counter{}", *counter);
+}
+
+macro_rules! hi {
+    () => {
+        println!("hi.. Macro")
+    };
+    ($name : expr) => {
+        println!("hi {}!", $name);
+    };
+}
+#[test]
+fn test_macro() {
+    hi!();
+    hi!("Ibrohim");
+    hi! {
+        "Ibrohim"
+    };
+}
+
+macro_rules! iteration {
+    ($array: expr) => {
+        for i in $array {
+            println!("{}", i);
+        }
+    };
+    ($($item: expr), *) => {
+        $(
+            println!("{}", $item);
+        )*
+    }
+}
+#[test]
+fn test_macro_iterate() {
+    iteration!([1, 2, 3, 4, 5, 6]);
+    iteration!(1, 2, 3, 4, 45, 5);
 }
